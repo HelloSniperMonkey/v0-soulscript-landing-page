@@ -1,15 +1,55 @@
+'use client'
+
 import { Search } from "lucide-react"
 import Navbar from "@/components/navbar"
 import BlogCard from "@/components/blog-card"
 import BlogSidebar from "@/components/blog-sidebar"
-import { blogPosts } from "@/data/blog-posts"
-
-export const metadata = {
-  title: "SoulScript - Mental Health Blog",
-  description: "Insights, tips, and stories about mental health, wellness, and personal growth.",
-}
+import { supabase } from "@/lib/supabaseClient"
+import { useEffect, useState } from "react"
+import type { BlogPost } from "@/types/blog"
 
 export default function BlogsPage() {
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchPosts() {
+      try {
+        const { data, error } = await supabase
+          .from("posts")
+          .select("*")
+          .order("created_at", { ascending: false })
+
+        if (error) {
+          throw error
+        }
+        setBlogPosts(data as BlogPost[])
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPosts()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        Loading posts...
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        Error loading posts: {error}
+      </div>
+    )
+  }
   return (
     <div className="min-h-screen bg-black text-white">
       <Navbar />

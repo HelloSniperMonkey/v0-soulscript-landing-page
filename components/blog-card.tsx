@@ -30,7 +30,7 @@ export default function BlogCard({ post }: BlogCardProps) {
       <div className="p-4">
         <div className="flex items-center mb-2">
           <img
-            src={post.author.avatar || "/placeholder.svg"}
+            src={"https://auzgxzljszsarpxeosby.supabase.co/storage/v1/object/public/user-pfp//Default_pfp.png" || post.author.avatar}
             alt={post.author.name}
             className="w-6 h-6 rounded-full mr-2"
           />

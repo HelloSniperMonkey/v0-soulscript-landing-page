@@ -27,13 +27,13 @@ export default function Navbar() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-6">
-            <Link href="/journal" className="text-gray-300 hover:text-white transition-colors">
+            <Link href="https://v0-mongo-db-journal-app.vercel.app/" className="text-gray-300 hover:text-white transition-colors">
               Journal
             </Link>
             <Link href="/persona-dashboard" className="text-gray-300 hover:text-white transition-colors">
               Persona Dashboard
             </Link>
-            <Link href="/chatbot" className="text-gray-300 hover:text-white transition-colors">
+            <Link href="https://soulscript01.vercel.app" className="text-gray-300 hover:text-white transition-colors">
               Interactive Chatbot
             </Link>
             <Link href="/blogs" className="text-gray-300 hover:text-white transition-colors">

@@ -10,6 +10,8 @@ import { ImageIcon, LinkIcon, Check, Smile, Paperclip } from "lucide-react"
 import Navbar from "@/components/navbar"
 import BlogSidebar from "@/components/blog-sidebar"
 import TagInput from "@/components/tag-input"
+import { supabase } from "@/lib/supabaseClient"
+import { v4 as uuidv4 } from 'uuid';
 
 export default function NewPostPage() {
   const router = useRouter()
@@ -20,16 +22,36 @@ export default function NewPostPage() {
   const [activeTab, setActiveTab] = useState("write")
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null)
   const [isSaved, setIsSaved] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleThumbnailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setThumbnailPreview(e.target?.result as string)
+      setThumbnailPreview(URL.createObjectURL(file)) // Show preview immediately
+
+      // Upload to Supabase Storage
+      setIsUploading(true)
+      setUploadError(null)
+      const fileName = `${uuidv4()}-${file.name}`
+      const { data, error } = await supabase.storage
+        .from('blog-thumbnails') // Make sure this bucket exists and has correct policies
+        .upload(fileName, file)
+
+      if (error) {
+        console.error("Error uploading thumbnail:", error)
+        setUploadError(error.message)
+        setThumbnailPreview(null) // Clear preview on error
+      } else if (data) {
+        // Get public URL
+        const { data: publicUrlData } = supabase.storage
+          .from('blog-thumbnails')
+          .getPublicUrl(fileName)
+        setThumbnailPreview(publicUrlData.publicUrl)
+        console.log("Uploaded thumbnail URL:", publicUrlData.publicUrl)
       }
-      reader.readAsDataURL(file)
+      setIsUploading(false)
     }
   }
 
@@ -37,15 +59,51 @@ export default function NewPostPage() {
     fileInputRef.current?.click()
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Here you would typically send the data to your API
-    console.log({ title, content, tags, category, thumbnailPreview })
+    
+    if (!title || !content || !category) {
+      alert("Please fill in title, content, and category.")
+      return
+    }
 
-    // Simulate successful post creation
-    setTimeout(() => {
-      router.push("/blogs")
-    }, 1000)
+    // Ensure thumbnailPreview is not null before proceeding
+    let coverImageUrl = thumbnailPreview;
+    if (isUploading) {
+      alert("Image is still uploading. Please wait.");
+      return;
+    }
+    if (uploadError) {
+      alert(`Image upload failed: ${uploadError}. Please try again or remove the image.`);
+      // Optionally, allow posting without an image or clear the error
+      // coverImageUrl = null; // Or some default
+    }
+
+
+    const newPost = {
+      slug: title.toLowerCase().replace(/\\s+/g, '-').replace(/[^a-z0-9-]/g, ''), // simple slug generation
+      title,
+      content, // Storing raw markdown/text
+      tags,
+      category, 
+      coverImage: coverImageUrl, // Use the public URL from Supabase Storage
+      author: { name: "Current User", avatar: "/placeholder-user.jpg" }, // Replace with actual user data
+      date: new Date().toISOString(),
+      readTime: Math.ceil(content.split(' ').length / 200), 
+      likes: 0,
+      comments: 0,
+      // user_id: session?.user?.id // If you have auth setup
+    }
+
+    const { data, error } = await supabase.from('posts').insert([newPost]).select()
+
+    if (error) {
+      console.error("Error creating post:", error)
+      alert(`Error creating post: ${error.message}`)
+    } else {
+      console.log("Post created:", data)
+      router.push("/blogs") // Navigate immediately after successful post
+    }
   }
 
   const handleAutoSave = () => {
@@ -105,8 +163,7 @@ export default function NewPostPage() {
                             <option key={cat} value={cat}>
                               {cat}
                             </option>
-                          ))}
-                        </select>
+                          ))}</select>
                         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                           <svg
                             className="h-5 w-5 text-gray-400"
@@ -132,22 +189,15 @@ export default function NewPostPage() {
                         className="flex items-center justify-center bg-gray-800 border border-gray-700 border-dashed rounded-md h-40 cursor-pointer hover:bg-gray-750 transition-colors"
                       >
                         {thumbnailPreview ? (
-                          <div className="relative w-full h-full">
-                            <img
-                              src={thumbnailPreview || "/placeholder.svg"}
-                              alt="Thumbnail preview"
-                              className="w-full h-full object-cover rounded-md"
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity">
-                              <p className="text-white text-sm">Change thumbnail</p>
-                            </div>
-                          </div>
+                          <img src={thumbnailPreview} alt="Thumbnail preview" className="h-full w-full object-cover rounded-md" />
                         ) : (
-                          <div className="text-center">
-                            <ImageIcon className="h-10 w-10 text-gray-400 mx-auto mb-2" />
-                            <p className="text-gray-400 text-sm">Thumbnail</p>
+                          <div className="text-center text-gray-400">
+                            <ImageIcon className="h-12 w-12 mx-auto mb-2" />
+                            <span>Click to upload thumbnail</span>
                           </div>
                         )}
+                        {isUploading && <p className="mt-2 text-sm text-purple-400">Uploading image...</p>}
+                        {uploadError && <p className="mt-2 text-sm text-red-500">Upload error: {uploadError}</p>}
                       </div>
                       <input
                         type="file"
@@ -185,79 +235,41 @@ export default function NewPostPage() {
                           <button
                             type="button"
                             onClick={() => setActiveTab("write")}
-                            className={`flex-1 py-2 px-4 text-center ${
-                              activeTab === "write" ? "bg-gray-700 text-white" : "text-gray-400"
-                            }`}
+                            className={`px-4 py-2 ${
+                              activeTab === "write" ? "bg-gray-700" : "hover:bg-gray-750"
+                            } transition-colors`}
                           >
                             Write
                           </button>
                           <button
                             type="button"
                             onClick={() => setActiveTab("preview")}
-                            className={`flex-1 py-2 px-4 text-center ${
-                              activeTab === "preview" ? "bg-gray-700 text-white" : "text-gray-400"
-                            }`}
+                            className={`px-4 py-2 ${
+                              activeTab === "preview" ? "bg-gray-700" : "hover:bg-gray-750"
+                            } transition-colors`}
                           >
                             Preview
                           </button>
-                          <div className="flex items-center px-4">
-                            {isSaved && (
-                              <div className="flex items-center text-green-400 text-xs">
-                                <Check className="h-3 w-3 mr-1" />
-                                Saved
-                              </div>
-                            )}
-                          </div>
                         </div>
-
                         {activeTab === "write" ? (
-                          <div className="relative">
-                            <textarea
-                              value={content}
-                              onChange={(e) => {
-                                setContent(e.target.value)
-                                handleAutoSave()
-                              }}
-                              placeholder="Share your thoughts"
-                              className="w-full bg-gray-800 p-4 text-white placeholder-gray-400 focus:outline-none min-h-[300px] resize-y"
-                              maxLength={10000}
-                            ></textarea>
-                            <div className="absolute right-3 bottom-3 text-xs text-gray-400">
-                              {content.length}/10000
-                            </div>
-                          </div>
+                          <textarea
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            placeholder="Start writing your amazing blog post here...\nUse markdown for formatting."
+                            className="w-full h-64 bg-gray-800 p-4 text-white placeholder-gray-400 focus:outline-none resize-none"
+                          />
                         ) : (
-                          <div className="p-4 min-h-[300px] prose prose-invert max-w-none">
-                            {content ? (
-                              <div dangerouslySetInnerHTML={{ __html: content.replace(/\n/g, "<br />") }} />
-                            ) : (
-                              <p className="text-gray-400">Nothing to preview</p>
-                            )}
-                          </div>
+                          <div 
+                            className="p-4 prose prose-invert prose-purple max-w-none min-h-[16rem] whitespace-pre-wrap" 
+                            dangerouslySetInnerHTML={{ __html: content.replace(/\\n/g, '<br />') /* Basic preview, consider a markdown library */ }} 
+                          />
                         )}
-
-                        <div className="flex items-center justify-between p-2 border-t border-gray-700">
-                          <div className="flex space-x-2">
-                            <button
-                              type="button"
-                              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
-                            >
-                              <Paperclip className="h-5 w-5" />
-                            </button>
-                            <button
-                              type="button"
-                              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
-                            >
-                              <LinkIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              type="button"
-                              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
-                            >
-                              <Smile className="h-5 w-5" />
-                            </button>
+                        <div className="flex items-center justify-between p-2 border-t border-gray-700 text-xs text-gray-400">
+                          <div>Markdown supported</div>
+                          <div className="flex items-center">
+                            {isSaved && <Check className="h-4 w-4 text-green-500 mr-1" />}
+                            <span>{content.split(/\\s+/).filter(Boolean).length} words</span>
                           </div>
-                          <div className="text-xs text-gray-400">Attach images by dragging & dropping</div>
                         </div>
                       </div>
                     </div>
