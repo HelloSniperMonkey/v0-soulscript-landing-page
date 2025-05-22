@@ -5,10 +5,11 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Menu, X } from "lucide-react"
 import { useAuth } from "@/context/auth-context"
+import { UserButton } from "@clerk/nextjs"
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const { isLoggedIn, login, logout } = useAuth()
+  const { isLoggedIn, login, logout, userButton } = useAuth()
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen)
@@ -44,16 +45,21 @@ export default function Navbar() {
           {/* Auth Buttons - Desktop */}
           <div className="hidden md:flex items-center space-x-4">
             {isLoggedIn ? (
-              <Button variant="ghost" onClick={logout} className="text-white hover:bg-purple-900/30">
-                Sign Out
-              </Button>
+              <div className="flex items-center space-x-4">
+                <span className="text-white">
+                  {userButton()}
+                </span>
+                <Button variant="ghost" asChild className="text-white hover:bg-purple-900/30">
+                  <span>{logout()}</span>
+                </Button>
+              </div>
             ) : (
               <>
-                <Button variant="ghost" onClick={login} className="text-white hover:bg-purple-900/30">
-                  Login
+                <Button variant="ghost" asChild className="text-white hover:bg-purple-900/30">
+                  <span>{login()}</span>
                 </Button>
-                <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-0">
-                  Sign Up
+                <Button asChild className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-0">
+                  <Link href="/sign-up">Sign Up</Link>
                 </Button>
               </>
             )}
@@ -107,33 +113,33 @@ export default function Navbar() {
 
             <div className="pt-4 border-t border-gray-800 flex flex-col space-y-3">
               {isLoggedIn ? (
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    logout()
-                    setIsMenuOpen(false)
-                  }}
-                  className="justify-center text-white hover:bg-purple-900/30"
-                >
-                  Sign Out
-                </Button>
+                <>
+                  <div className="flex justify-center py-2">
+                    {userButton()}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    asChild
+                    className="justify-center text-white hover:bg-purple-900/30"
+                  >
+                    <span>{logout()}</span>
+                  </Button>
+                </>
               ) : (
                 <>
                   <Button
                     variant="ghost"
-                    onClick={() => {
-                      login()
-                      setIsMenuOpen(false)
-                    }}
+                    asChild
                     className="justify-center text-white hover:bg-purple-900/30"
                   >
-                    Login
+                    <span>{login()}</span>
                   </Button>
                   <Button
+                    asChild
                     className="justify-center bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white border-0"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    Sign Up
+                    <Link href="/sign-up">Sign Up</Link>
                   </Button>
                 </>
               )}

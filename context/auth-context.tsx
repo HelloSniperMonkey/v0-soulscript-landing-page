@@ -1,22 +1,44 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { createContext, useContext, type ReactNode } from "react"
+import { useAuth as useClerkAuth, useUser, SignInButton, SignOutButton, UserButton } from "@clerk/nextjs"
+import type { JSX } from "react"
 
 interface AuthContextType {
   isLoggedIn: boolean
-  login: () => void
-  logout: () => void
+  userId: string | null
+  login: () => JSX.Element
+  logout: () => JSX.Element
+  userButton: () => JSX.Element
+  user: ReturnType<typeof useUser>["user"]
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const { isLoaded, userId } = useClerkAuth()
+  const { user } = useUser()
+  
+  const isLoggedIn = isLoaded && !!userId
 
-  const login = () => setIsLoggedIn(true)
-  const logout = () => setIsLoggedIn(false)
+  const login = () => <SignInButton />
+  const logout = () => <SignOutButton />
+  const userButton = () => <UserButton />
 
-  return <AuthContext.Provider value={{ isLoggedIn, login, logout }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider 
+      value={{ 
+        isLoggedIn, 
+        userId: userId || null, 
+        login, 
+        logout, 
+        userButton, 
+        user 
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {
