@@ -12,9 +12,11 @@ import BlogSidebar from "@/components/blog-sidebar"
 import TagInput from "@/components/tag-input"
 import { supabase } from "@/lib/supabaseClient"
 import { v4 as uuidv4 } from 'uuid';
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 export default function NewPostPage() {
   const router = useRouter()
+  const { user, loading: userLoading } = useCurrentUser()
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [tags, setTags] = useState<string[]>([])
@@ -62,6 +64,12 @@ export default function NewPostPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    if (!user) {
+      alert("You must be signed in to create a post.")
+      router.push("/sign-in?redirect_url=/blogs/new")
+      return
+    }
+    
     if (!title || !content || !category) {
       alert("Please fill in title, content, and category.")
       return
@@ -80,29 +88,67 @@ export default function NewPostPage() {
     }
 
 
+    // Generate a UUID for this post - this will be our primary key
+    const postId = uuidv4();
+    
     const newPost = {
+      id: postId, // Use generated UUID as the post ID
       slug: title.toLowerCase().replace(/\\s+/g, '-').replace(/[^a-z0-9-]/g, ''), // simple slug generation
       title,
       content, // Storing raw markdown/text
       tags,
       category, 
       coverImage: coverImageUrl, // Use the public URL from Supabase Storage
-      author: { name: "Current User", avatar: "/placeholder-user.jpg" }, // Replace with actual user data
+      author: { 
+        name: user?.fullName || "Anonymous User", 
+        avatar: user?.imageUrl || "https://auzgxzljszsarpxeosby.supabase.co/storage/v1/object/public/user-pfp//Default_pfp.png"
+      },
       date: new Date().toISOString(),
       readTime: Math.ceil(content.split(' ').length / 200), 
       likes: 0,
       comments: 0,
-      // user_id: session?.user?.id // If you have auth setup
+      clerk_user_id: user?.id, // Store Clerk's user ID as a string
+      // We're not setting user_id field as it expects UUID
     }
 
-    const { data, error } = await supabase.from('posts').insert([newPost]).select()
+    try {
+      // First, check if the clerk_user_id column exists by doing a small query
+      const { error: checkError } = await supabase
+        .from('posts')
+        .select('id, clerk_user_id')
+        .limit(1)
+      
+      // If clerk_user_id doesn't exist yet, show a message to apply migration
+      if (checkError && checkError.message.includes('column "clerk_user_id" does not exist')) {
+        console.error("Database schema needs updating:", checkError);
+        alert(
+          "The database schema needs to be updated. Please ask an administrator to run " +
+          "the migration script in the 'migrations' folder to add the clerk_user_id column."
+        );
+        return;
+      }
+      
+      // Proceed with insertion
+      const { data, error } = await supabase.from('posts').insert([newPost]).select()
 
-    if (error) {
-      console.error("Error creating post:", error)
-      alert(`Error creating post: ${error.message}`)
-    } else {
-      console.log("Post created:", data)
-      router.push("/blogs") // Navigate immediately after successful post
+      if (error) {
+        console.error("Error creating post:", error)
+        
+        if (error.message.includes('invalid input syntax for type uuid')) {
+          alert(
+            "Error creating post: There's an issue with the user ID format. " +
+            "Please make sure you've applied the database migration from the 'migrations' folder."
+          )
+        } else {
+          alert(`Error creating post: ${error.message}`)
+        }
+      } else {
+        console.log("Post created:", data)
+        router.push("/blogs") // Navigate immediately after successful post
+      }
+    } catch (err) {
+      console.error("Unexpected error:", err)
+      alert(`An unexpected error occurred. Please try again later.`)
     }
   }
 
@@ -138,6 +184,32 @@ export default function NewPostPage() {
 
             {/* Main Content */}
             <div className="flex-1 bg-gray-900 rounded-lg p-6">
+              {/* User Info */}
+              <div className="mb-6 p-4 bg-gray-800 rounded-lg">
+                <div className="flex items-center">
+                  <div className="relative h-8 w-8 rounded-full overflow-hidden mr-3">
+                    {userLoading ? (
+                      <div className="animate-pulse bg-gray-700 h-full w-full"></div>
+                    ) : (
+                      <img 
+                        src={user?.imageUrl || "/placeholder-user.jpg"}
+                        alt="Profile" 
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">
+                      {userLoading ? (
+                        <div className="animate-pulse bg-gray-700 h-4 w-32 rounded"></div>
+                      ) : (
+                        <p>Posting as: {user?.fullName || "Anonymous User"}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
               <Tabs defaultValue="post" className="mb-6">
                 <TabsList className="bg-gray-800">
                   <TabsTrigger value="post" className="data-[state=active]:bg-gray-700">

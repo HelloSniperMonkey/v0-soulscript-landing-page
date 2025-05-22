@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Heart, MessageSquare, Bookmark, Share2 } from "lucide-react"
 import type { BlogPost } from "@/types/blog"
+import { formatDate } from "@/lib/date-utils"
 
 interface BlogCardProps {
   post: BlogPost
@@ -30,12 +31,12 @@ export default function BlogCard({ post }: BlogCardProps) {
       <div className="p-4">
         <div className="flex items-center mb-2">
           <img
-            src={"https://auzgxzljszsarpxeosby.supabase.co/storage/v1/object/public/user-pfp//Default_pfp.png" || post.author.avatar}
-            alt={post.author.name}
+            src={post.author.avatar || "https://auzgxzljszsarpxeosby.supabase.co/storage/v1/object/public/user-pfp//Default_pfp.png"}
+            alt={post.author.name || "Author"}
             className="w-6 h-6 rounded-full mr-2"
           />
           <span className="text-sm text-gray-400">{post.author.name}</span>
-          <span className="text-gray-500 text-xs ml-auto">{post.date}</span>
+          <span className="text-gray-500 text-xs ml-auto">{formatDate(post.date)}</span>
         </div>
 
         <Link href={`/blogs/${post.slug}`}>
